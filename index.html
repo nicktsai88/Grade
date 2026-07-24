@@ -54,7 +54,7 @@
         .field select, .field input { width: 100%; background: #0f172a; color: var(--text); border: 1px solid var(--line); border-radius: 14px; padding: 11px 12px; font-size: 16px; }
         .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
         
-        .dash { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+        .dash { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
         .metric { background: rgba(15,23,42,.72); border: 1px solid var(--line); border-radius: 20px; padding: 16px; text-align: center; }
         .metric b { display: block; font-size: 32px; color: white; margin-bottom: 4px; }
         .metric span { color: var(--muted); font-size: 14px; font-weight: bold; }
@@ -83,7 +83,7 @@
             .layout, .hero { grid-template-columns: 1fr; }
         }
         @media(max-width:520px) {
-            .dash { grid-template-columns: 1fr; }
+            .dash { grid-template-columns: repeat(2, 1fr); }
             .field { grid-template-columns: 1fr; gap: 4px;}
             .card { padding: 14px; }
             .hero h1 { font-size: 28px; }
@@ -144,6 +144,7 @@
                 <div class="metric"><b id="totalPts">-</b><span>會考積分 (滿分30)</span></div>
                 <div class="metric"><b id="totalDots">-</b><span>會考積點 (滿分35)</span></div>
                 <div class="metric"><b id="gradeComb">-</b><span>等第組合</span></div>
+                <div class="metric"><b id="plusCount">-</b><span>+ 號數</span></div>
             </div>
 
             <div class="card cols">
@@ -183,11 +184,11 @@ const dotsLevel = { "A++": 7, "A+": 6, "A": 5, "B++": 4, "B+": 3, "B": 2, "C": 1
 // 高雄區積分計算 (各科滿分 6，五科共 30)
 const ptsLevel = { "A": 6, "B": 4, "C": 2 };
 
-// 115 高雄區預估資料 [學校名稱, 預估積分, 預估積點]
+// 115 高雄區預估資料 [學校名稱, 預估積分, 預估積點, 實際錄取人數]
 const kaohsiungSchools = [
-    ['高雄高中', 30, 29],
-    ['高雄女中', 30, 28],
-    ['高師大附中', 30, 28],
+    ['高雄高中', 30, 29, 721],
+    ['高雄女中', 30, 28, 707],
+    ['高師大附中', 30, 28, 233],
     ['鳳山高中', 28, 28],
     ['新莊高中', 26, 23],
     ['鳯新高中', 26, 23],
@@ -235,10 +236,15 @@ function calcScores() {
     let uPts = 0;   // 積分
     let uDots = 0;  // 積點
     let countA = 0, countB = 0, countC = 0;
+    let plusCount = 0; // + 號數
     
     vals.forEach(v => {
         // 計算積點
         uDots += dotsLevel[v];
+        
+        // 計算 + 號數
+        if (v.includes('++')) plusCount += 2;
+        else if (v.includes('+')) plusCount += 1;
         
         // 計算積分與等第組合
         if (v.startsWith('A')) {
@@ -255,7 +261,7 @@ function calcScores() {
 
     const gradeComb = `${countA ? `${countA}A` : ''}${countB ? `${countB}B` : ''}${countC ? `${countC}C` : ''}` || '—';
     
-    return { uPts, uDots, gradeComb };
+    return { uPts, uDots, gradeComb, plusCount };
 }
 
 function getBand(uPts, uDots, tPts, tDots) {
@@ -276,7 +282,8 @@ function getBand(uPts, uDots, tPts, tDots) {
     return null; 
 }
 
-function renderSchool(name, tPts, tDots, kind, cls) {
+function renderSchool(name, tPts, tDots, kind, cls, quota) {
+    const quotaHtml = quota ? `<div>錄取名額：<b>${quota} 人</b></div>` : '';
     return `
         <div class="school">
             <div class="schoolTop">
@@ -285,6 +292,7 @@ function renderSchool(name, tPts, tDots, kind, cls) {
             </div>
             <div class="meta">
                 <div>預估門檻：<b>${tPts}分 / ${tDots}點</b></div>
+                ${quotaHtml}
             </div>
         </div>
     `;
@@ -308,19 +316,20 @@ function analyze() {
     document.getElementById('totalPts').textContent = scores.uPts;
     document.getElementById('totalDots').textContent = scores.uDots;
     document.getElementById('gradeComb').textContent = scores.gradeComb;
+    document.getElementById('plusCount').textContent = scores.plusCount;
     
     // 準備各群組容器
     const groups = { A: [], B: [], C: [], D: [] };
     
     // 處理陣列
     kaohsiungSchools.forEach(s => {
-        const [name, tPts, tDots] = s;
+        const [name, tPts, tDots, quota] = s;
         const bandResult = getBand(scores.uPts, scores.uDots, tPts, tDots);
         
         // 如果沒有回傳 band (差距太大)，則跳過不顯示
         if (!bandResult) return;
         
-        const html = renderSchool(name, tPts, tDots, bandResult[0], bandResult[1]);
+        const html = renderSchool(name, tPts, tDots, bandResult[0], bandResult[1], quota);
         
         // 依照分數分群
         if (tPts >= 30) {
